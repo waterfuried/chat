@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import java.lang.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox fx:controller="RegController"
+      alignment="center" stylesheets="@css/style.css"
+      xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1" >
+
+   <GridPane VBox.vgrow="ALWAYS">
+     <columnConstraints>
+       <ColumnConstraints fillWidth="false" halignment="CENTER" hgrow="NEVER" minWidth="10.0" prefWidth="100.0" />
+       <ColumnConstraints hgrow="SOMETIMES" minWidth="10.0" prefWidth="100.0" />
+     </columnConstraints>
+     <rowConstraints>
+       <RowConstraints minHeight="10.0" prefHeight="30.0" vgrow="SOMETIMES" />
+       <RowConstraints minHeight="10.0" prefHeight="30.0" vgrow="SOMETIMES" />
+       <RowConstraints minHeight="10.0" prefHeight="30.0" vgrow="SOMETIMES" />
+     </rowConstraints>
+
+     <Label text="login"/>
+     <TextField fx:id="loginField" onAction="#register" promptText="login"
+                styleClass="round_bg" GridPane.columnIndex="1"/>
+     <Label text="password" GridPane.rowIndex="1"/>
+     <PasswordField fx:id="passwordField" onAction="#register" promptText="password"
+                    styleClass="round_bg" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+     <Label text="nickname" GridPane.rowIndex="2"/>
+     <TextField fx:id="nicknameField" onAction="#register" promptText="nickname"
+                styleClass="round_bg" GridPane.columnIndex="1" GridPane.rowIndex="2"/>
+   </GridPane>
+
+  <TextArea fx:id="textArea" editable="false" VBox.vgrow="ALWAYS"/>
+  <Button fx:id="btnReg" disable="true" onAction="#register" text="register">
+      <styleClass>
+          <String fx:value="round_bg_10"/>
+          <String fx:value="gold-bg_bright-fg"/>
+      </styleClass>
+  </Button>
+</VBox>

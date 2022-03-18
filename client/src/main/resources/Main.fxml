@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import java.lang.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox fx:controller="Controller" xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
+      alignment="center" stylesheets="@css/style.css">
+
+    <HBox fx:id="authPanel">
+        <TextField fx:id="loginField" onAction="#authorize" promptText="login"
+                   styleClass="round_bg" HBox.hgrow="ALWAYS" />
+        <PasswordField fx:id="passwordField" onAction="#authorize" promptText="password"
+                       styleClass="round_bg" HBox.hgrow="ALWAYS" />
+        <Button fx:id="btnAuth" disable="true" onAction="#authorize" text="Authorize">
+         <styleClass>
+            <String fx:value="round_bg" />
+            <String fx:value="dark-bg_bright-fg" />
+         </styleClass>
+        </Button>
+        <Button onAction="#showRegistrationForm" text="Register">
+         <styleClass>
+            <String fx:value="round_bg" />
+            <String fx:value="dark-bg_bright-fg" />
+         </styleClass>
+        </Button>
+    </HBox>
+    <HBox VBox.vgrow="ALWAYS">
+        <TextArea fx:id="textArea" editable="false" HBox.hgrow="ALWAYS" />
+        <ListView fx:id="clientList" managed="false" minWidth="150" visible="false" />
+    </HBox>
+    <HBox fx:id="msgPanel" managed="false" visible="false">
+        <TextField fx:id="textField" onAction="#sendMsg" onKeyReleased="#TFkeyReleased" promptText="input text"
+                   styleClass="round_bg" HBox.hgrow="ALWAYS" />
+        <Button onAction="#sendMsg" text="send">
+         <styleClass>
+            <String fx:value="button" />
+            <String fx:value="round_bg" />
+            <String fx:value="dark-bg_bright-fg" />
+         </styleClass></Button>
+    </HBox>
+</VBox>

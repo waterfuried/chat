@@ -1,0 +1,9 @@
+# Project exclude paths
+/out/
+/.idea/
+test/
+target/
+*.xml
+*.iml
+*.class
+*.db
