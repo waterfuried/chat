@@ -61,7 +61,7 @@ public class AuthServiceDB extends AuthServiceCommon {
         }
     }
 
-    // проверить наличие пользователя в таблице БД
+    // проверить наличие пользователя в таблице БД по логину и паролю
     @Override public String getNickname(String login, String password) {
         try (PreparedStatement ps = connection.prepareStatement(
             "SELECT * FROM " + DB_USERS_TABLE + " WHERE login = ? AND pwd = ? LIMIT 1;")) {
@@ -74,6 +74,16 @@ public class AuthServiceDB extends AuthServiceCommon {
             ex.printStackTrace();
         }
         return null;
+    }
+
+    // проверить наличие пользователя в таблице БД по никнейму
+    @Override public boolean alreadyRegistered(String nickname) {
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT nickname FROM " + DB_USERS_TABLE + " WHERE nickname = ? LIMIT 1;")) {
+            ps.setString(1, nickname);
+            return ps.executeQuery().next();
+        } catch (SQLException ex) { ex.printStackTrace(); }
+        return false;
     }
 
     // изменить никнейм пользователя

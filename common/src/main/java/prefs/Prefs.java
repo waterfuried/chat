@@ -24,7 +24,10 @@ public class Prefs {
     public static final String SRV_CHANGE_OK = "change_ok";
     public static final String SRV_CHANGE_FAULT = "change_fault";
 
-    public static String getCommand (String cmdName, String ... args) {
+    // имя папки с журналами пользоватлей
+    public static final String historyFolder = "history";
+
+    public static String getCommand(String cmdName, String ... args) {
         if (args == null || args.length == 0)
             return COM_ID + cmdName;
 
@@ -33,4 +36,6 @@ public class Prefs {
             sb.append(" ").append(s);
         return sb.toString();
     }
+
+    public static String getExitCommand() { return getCommand(COM_QUIT); }
 }

@@ -51,6 +51,9 @@ public class Controller implements Initializable {
     public boolean serverRunning;
     private boolean clientRunning;
 
+    private TimeVisor timeVisor;
+    private boolean dateLogged;
+
     private DataInputStream in;
     private DataOutputStream out;
 
@@ -61,7 +64,7 @@ public class Controller implements Initializable {
     private String history = "";
 
     // изменить признак авторизации пользователя
-    public void changeUserState (boolean authorized) {
+    public void changeUserState(boolean authorized) {
         this.authorized = authorized;
         authPanel.setVisible(!authorized);
         authPanel.setManaged(!authorized);
@@ -81,21 +84,27 @@ public class Controller implements Initializable {
     }
 
     private boolean incompleteUserData() {
-        return loginField.getText().trim().length() == 0 || passwordField.getText().trim().length() == 0;
+        return loginField.getText().trim().length() == 0
+                || passwordField.getText().trim().length() == 0;
+    }
+
+    private void updateTextArea(String message) {
+        if (timeVisor.dateChanged()) dateLogged = false;
+        if (!dateLogged) {
+            textArea.appendText("Сегодня " + timeVisor.getCurrentDate() + "\n");
+            dateLogged = true;
+        }
+        textArea.appendText(timeVisor.getCurrentTime() + "\t" + message + "\n");
     }
 
     @Override
-    public void initialize (URL location, ResourceBundle resources) {
+    public void initialize(URL location, ResourceBundle resources) {
         Platform.runLater(() -> {
             stage = (Stage) textField.getScene().getWindow();
             stage.setOnCloseRequest(event -> {
-                if (socket != null && !socket.isClosed()) {
-                    try {
-                        out.writeUTF(Prefs.getCommand(Prefs.COM_QUIT));
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
+                if (socket != null && !socket.isClosed())
+                    try { out.writeUTF(Prefs.getExitCommand()); }
+                    catch (IOException ex) { ex.printStackTrace(); }
                 clientRunning = false;
             });
 
@@ -116,14 +125,16 @@ public class Controller implements Initializable {
             });
             clientList.setContextMenu(new ContextMenu(menuItem));
         });
+        timeVisor = new TimeVisor();
         clientRunning = true;
         changeUserState(false);
     }
 
-    private void setTitle (String nickname) {
+    private void setTitle(String nickname) {
         Platform.runLater(() -> {
             String title = "Chatty";
-            if (nickname != null && nickname.length() > 0) title += " [ " + nickname + " ]";
+            if (nickname != null && nickname.length() > 0)
+                title += " [ " + nickname + " ]";
             stage.setTitle(title);
         });
     }
@@ -152,9 +163,7 @@ public class Controller implements Initializable {
                         String str = in.readUTF();
 
                         if (str.startsWith(Prefs.COM_ID)) {
-                            if (str.equals(Prefs.getCommand(Prefs.COM_QUIT))) {
-                                break;
-                            }
+                            if (str.equals(Prefs.getExitCommand())) break;
                             // авторизация прошла
                             if (str.startsWith(Prefs.getCommand(Prefs.SRV_AUTH_OK))) {
                                 nickname = str.split(" ")[1];
@@ -166,9 +175,8 @@ public class Controller implements Initializable {
                                 str.equals(Prefs.getCommand(Prefs.SRV_REG_FAULT))) {
                                 regController.showResult(str);
                             }
-                        } else {
-                            textArea.appendText(str + "\n");
-                        }
+                        } else
+                            updateTextArea(str);
                     }
 
                     // сообщение об истечении времени авторизации
@@ -189,16 +197,14 @@ public class Controller implements Initializable {
 
                         if (str.startsWith(Prefs.COM_ID)) {
                             //команда выхода
-                            if (str.equals(Prefs.getCommand(Prefs.COM_QUIT)))
-                                break;
+                            if (str.equals(Prefs.getExitCommand())) break;
                             //список пользователей
                             if (str.startsWith(Prefs.getCommand(Prefs.COM_CLIENT_LIST))) {
                                 Platform.runLater(() -> {
                                     clientList.getItems().clear();
                                     String[] token = str.split(" ");
-                                    for (int i = 1; i < token.length; i++) {
+                                    for (int i = 1; i < token.length; i++)
                                         clientList.getItems().add(token[i]);
-                                    }
                                 });
                             }
                             //попытка смены никнейма
@@ -207,34 +213,29 @@ public class Controller implements Initializable {
                                 if (s.length == 2) setTitle(nickname = s[1]);
                             }
                             if (str.equals(Prefs.getCommand(Prefs.SRV_CHANGE_FAULT)))
-                                textArea.appendText("Ошибка обновления информации в БД");
-                        } else {
-                            textArea.appendText(str + "\n");
-                        }
+                                updateTextArea("Ошибка обновления информации в БД");
+                        } else
+                            updateTextArea(str);
                     }
-                } catch (IOException e) {
-                    e.printStackTrace();
+                } catch (IOException ex) { ex.printStackTrace();
                 } finally {
                     changeUserState(false);
-                    try {
-                        socket.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+                    try { socket.close(); }
+                    catch (IOException ex) { ex.printStackTrace(); }
                 }
             }).start();
 
         } catch (Exception ex) {
             // если сервер не запущен, будет выброшено ConnectException: "Connection refused"
             if (ex.getClass() == ConnectException.class) {
-                if (!registering()) textArea.appendText("Нет связи с сервером\n");
+                if (!registering()) updateTextArea("Нет связи с сервером");
                 serverRunning = false;
             } else
                 ex.printStackTrace();
         }
     }
 
-    @FXML public void sendMsg (/*ActionEvent actionEvent*/) {
+    @FXML public void sendMsg(/*ActionEvent actionEvent*/) {
         try {
             out.writeUTF(textField.getText());
             if (history.length() == 0 || !history.equals(textField.getText()))
@@ -246,7 +247,7 @@ public class Controller implements Initializable {
         }
     }
 
-    @FXML public void authorize (/*ActionEvent actionEvent*/) {
+    @FXML public void authorize(/*ActionEvent actionEvent*/) {
         // при попытках входа по нажатию enter установить фокус на незаполненное поле
         if (loginField.getText().trim().length() == 0) {
             loginField.requestFocus();
@@ -292,13 +293,13 @@ public class Controller implements Initializable {
         }
     }
 
-    @FXML public void showRegistrationForm (/*ActionEvent actionEvent*/) {
+    @FXML public void showRegistrationForm(/*ActionEvent actionEvent*/) {
         if (regStage == null) createRegStage();
         textArea.clear();
         regStage.show();
     }
 
-    public void register (String login, String password, String nickname) {
+    public void register(String login, String password, String nickname) {
         if (socket == null || socket.isClosed()) {
             connect();
         }
@@ -313,7 +314,7 @@ public class Controller implements Initializable {
         }
     }
 
-    private boolean registering () {
+    private boolean registering() {
         return regStage != null && regController.isRegistering();
     }
 

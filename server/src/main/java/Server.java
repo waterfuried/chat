@@ -11,7 +11,7 @@ public class Server {
     private ServerSocket server;
     private Socket socket;
 
-    private List<ClientHandler> clients;
+    private final List<ClientHandler> clients;
     private AuthService authService;
 
     public Server() {
@@ -50,22 +50,30 @@ public class Server {
         }
     }
 
-    public void sendBroadcastMsg (ClientHandler sender, String msg){
+    // широковещательные сообщения записывать в журнал каждого пользователя
+    public void sendBroadcastMsg(ClientHandler sender, String msg){
         for (ClientHandler c : clients)
-            c.sendMsg(String.format("[ %s ]: %s", sender.getNickname(), msg));
+            c.sendLoggedMsg(String.format("[ %s ]: %s", sender.getNickname(), msg));
     }
 
-    public void sendPrivateMsg (ClientHandler sender, String receiver, String msg) {
+    // поскольку личные сообщения дооформляются ("для"/"от") здесь,
+    // получают их (с разным дооформлением) как отправитель, так и получатель,
+    // возвращать дооформенные в виде строк, чтобы записать в журнал отправителя
+    public String sendPrivateMsg(ClientHandler sender, String receiver, String msg) {
         String message = "[ личное сообщение %s %s ]: %s";
         for (ClientHandler c : clients) {
             if (c.getNickname().equals(receiver)) {
-                c.sendMsg(String.format(message, "от", sender.getNickname(), msg));
-                if (!receiver.equals(sender.getNickname()))
-                    sender.sendMsg(String.format(message, "для", receiver, msg));
-                return;
+                // отправка получателю
+                c.sendLoggedMsg(String.format(message, "от", sender.getNickname(), msg));
+                // отправка отправителю
+                if (!receiver.equals(sender.getNickname())) {
+                    sender.sendMsg(message = String.format(message, "для", receiver, msg));
+                    return message;
+                }
             }
         }
         sender.sendMsg("Пользователя с ником \"" + receiver + "\" нет в чате");
+        return "";
     }
 
     public void broadcastClientList() {
@@ -80,7 +88,7 @@ public class Server {
     }
 
     // проверить осуществление авторизиации пользователем с определенным логином
-    public boolean isUserConnected (String login) {
+    public boolean isUserConnected(String login) {
         for (ClientHandler c : clients)
             if (c.getLogin().equals(login))
                 return true;
@@ -110,12 +118,12 @@ public class Server {
             return false;
     }
 
-    public void subscribe (ClientHandler clientHandler){
+    public void subscribe(ClientHandler clientHandler){
         clients.add(clientHandler);
         broadcastClientList();
     }
 
-    public void unsubscribe (ClientHandler clientHandler){
+    public void unsubscribe(ClientHandler clientHandler){
         clients.remove(clientHandler);
         broadcastClientList();
     }
