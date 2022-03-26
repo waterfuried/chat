@@ -1,14 +1,12 @@
-import org.sqlite.util.StringUtils;
 import prefs.*;
 
 import java.io.*;
 
 import java.net.Socket;
 import java.net.SocketTimeoutException;
-import java.nio.charset.StandardCharsets;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.List;
 
 // обработчик запросов клиента
 public class ClientHandler {
@@ -69,14 +67,14 @@ public class ClientHandler {
                                             sendMsg(Prefs.getCommand(Prefs.SRV_AUTH_OK, nickname = newNick));
                                             authenticated = true;
                                             // после авторизации клиента отправить ему его последнюю историю
-                                            sendMsg(StringUtils.join(readLastLines(100),"\n"));
+                                            sendMsg(readLastLines(100));
                                             // и список активных пользователей
                                             server.subscribe(this);
                                             // TODO - здесь возможна неувязка:
                                             //  история читается из файла журнала для отправки клиенту,
-                                            //  запись сообщения в историю о новом входе в клиент
-                                            //  ДОЛЖНА ПРОИСХОЛИТЬ ТОЛЬКО ПОСЛЕ завершения чтения,
-                                            //  но сейчас (пока) может произойти раньше -
+                                            //  запись сообщения в историю о новом входе в клиентское
+                                            //  приложение ДОЛЖНА ПРОИСХОДИТЬ ТОЛЬКО ПОСЛЕ завершения
+                                            //  ее чтения, но сейчас (пока) может произойти раньше -
                                             //  запись в файл и чтение из него не согласованы
                                             logEvent("Выполнен вход в чат");
                                             break;
@@ -220,8 +218,8 @@ public class ClientHandler {
 
     void logEvent(String matter) { logEvent(null, matter); }
 
-    List<String> readLastLines(int number) {
-        List<String> lines = new ArrayList<>();
+    String readLastLines(int number) {
+        ArrayList<String> lines = new ArrayList<>();
         // последовательное чтение всех строк реализовано в библиотечном методе
         // Files.readAllLines(Paths.get(getLogName(login)), StandardCharsets.UTF_8)
         try (BufferedReader reader = new BufferedReader(new FileReader(getLogName(login)))) {
@@ -229,7 +227,10 @@ public class ClientHandler {
             while ((str = reader.readLine()) != null) lines.add(str);
             int n = 0;
             if (number < lines.size()) n = lines.size() - number;
-            return number >= lines.size() ? lines : lines.subList(n, n + number);
+            StringBuilder sb = new StringBuilder();
+            for (String s : number >= lines.size() ? lines : lines.subList(n, n + number))
+                sb.append(s).append("\n");
+            return sb.toString();
         } catch (IOException ex) {
             ex.printStackTrace();
             return null;

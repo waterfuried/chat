@@ -13,18 +13,16 @@ public class Prefs {
     public static final String COM_REGISTER = "reg";
     public static final String COM_PRIVATE_MSG = "w";
     public static final String COM_CLIENT_LIST = "clientlist";
-    // новая команда
     public static final String COM_CHANGE_NICK = "nick";
 
     // ответы сервера на запросы
     public static final String SRV_AUTH_OK = "auth_ok";
     public static final String SRV_REG_ACCEPT = "reg_ok";
     public static final String SRV_REG_FAULT = "reg_fault";
-    // ответы сервера на новую команду
     public static final String SRV_CHANGE_OK = "change_ok";
     public static final String SRV_CHANGE_FAULT = "change_fault";
 
-    // имя папки с журналами пользоватлей
+    // имя папки с журналами пользователей
     public static final String historyFolder = "history";
 
     public static String getCommand(String cmdName, String ... args) {
