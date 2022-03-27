@@ -72,6 +72,7 @@ public class Server {
                     sender.sendMsg(message = String.format(message, "для", receiver, msg));
                     return message;
                 }
+                return "";
             }
         }
         sender.sendMsg("Пользователя с ником \"" + receiver + "\" нет в чате");

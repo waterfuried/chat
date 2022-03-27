@@ -5,13 +5,13 @@ import java.util.Calendar;
 import java.util.Date;
 
 public class TimeVisor {
-    private int curDate;
+    public static int curDate;
 
-    public TimeVisor() { changeDate(); }
+    static  { changeDate(); }
 
-    private void changeDate() { curDate = Calendar.getInstance().get(Calendar.DATE); }
+    private static void changeDate() { curDate = Calendar.getInstance().get(Calendar.DATE); }
 
-    public boolean dateChanged() {
+    public static boolean dateChanged() {
         if (Calendar.getInstance().get(Calendar.DATE) != curDate) {
             changeDate();
             return true;
@@ -19,11 +19,11 @@ public class TimeVisor {
             return false;
     }
 
-    public String getCurrentDate() {
+    public static String getCurrentDate() {
         return new SimpleDateFormat("dd.MM.yyyy").format(new Date());
     }
 
-    public String getCurrentTime() {
+    public static String getCurrentTime() {
         return new SimpleDateFormat("HH:mm:ss").format(new Date());
     }
 }

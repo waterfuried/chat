@@ -16,7 +16,6 @@ public class ClientHandler {
     private boolean authenticated;
     private String login, nickname;
 
-    private TimeVisor timeVisor;
     private boolean dateLogged;
 
     private OutputStreamWriter logWriter;
@@ -32,7 +31,6 @@ public class ClientHandler {
 
             new Thread(() -> {
                 try {
-                    timeVisor = new TimeVisor();
                     //цикл аутентификации
 
                     // со стороны клиента запрос на установление связи (и открытие сокета) приходит
@@ -56,7 +54,6 @@ public class ClientHandler {
                             if (s.startsWith(Prefs.getCommand(Prefs.COM_AUTHORIZE))) {
                                 String[] token = s.split(" ", 3);
                                 if (token.length == 3) {
-                                    sendAuthorizationWarning();
                                     String newNick = server.getAuthService()
                                             .getNickname(login = token[1], token[2]);
                                     if (newNick != null) {
@@ -66,22 +63,17 @@ public class ClientHandler {
                                             socket.setSoTimeout(0);
                                             sendMsg(Prefs.getCommand(Prefs.SRV_AUTH_OK, nickname = newNick));
                                             authenticated = true;
+                                            logEvent("Выполнен вход в чат");
                                             // после авторизации клиента отправить ему его последнюю историю
-                                            sendMsg(readLastLines(100));
                                             // и список активных пользователей
                                             server.subscribe(this);
-                                            // TODO - здесь возможна неувязка:
-                                            //  история читается из файла журнала для отправки клиенту,
-                                            //  запись сообщения в историю о новом входе в клиентское
-                                            //  приложение ДОЛЖНА ПРОИСХОДИТЬ ТОЛЬКО ПОСЛЕ завершения
-                                            //  ее чтения, но сейчас (пока) может произойти раньше -
-                                            //  запись в файл и чтение из него не согласованы
-                                            logEvent("Выполнен вход в чат");
+                                            sendMsg(readLastLines(100));
                                             break;
                                         }
                                     } else {
                                         sendMsg("Логин / пароль не верны");
                                     }
+                                    if (!authenticated) sendAuthorizationWarning();
                                 }
                             }
 
@@ -206,12 +198,12 @@ public class ClientHandler {
                         throw new IOException("Невозможно создать папку с журналами");
                 }
 
-                if (timeVisor.dateChanged()) dateLogged = false;
+                if (TimeVisor.dateChanged()) dateLogged = false;
                 if (!dateLogged) {
-                    logWriter.write("Сегодня " + timeVisor.getCurrentDate() + "\n");
+                    logWriter.write("Сегодня " + TimeVisor.getCurrentDate() + "\n");
                     dateLogged = true;
                 }
-                logWriter.write(timeVisor.getCurrentTime() + "\t" + matter + "\n");
+                logWriter.write(TimeVisor.getCurrentTime() + "\t" + matter + "\n");
                 logWriter.flush();
             } catch (IOException ex) { ex.printStackTrace(); }
     }

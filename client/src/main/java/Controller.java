@@ -51,8 +51,10 @@ public class Controller implements Initializable {
     public boolean serverRunning;
     private boolean clientRunning;
 
-    private TimeVisor timeVisor;
     private boolean dateLogged;
+    // флаг почти равен по смыслу authorized, но позволяет не добавлять
+    // лишний перенос строки при получении истории сообщений
+    private boolean anyExceptHistory;
 
     private DataInputStream in;
     private DataOutputStream out;
@@ -89,12 +91,22 @@ public class Controller implements Initializable {
     }
 
     private void updateTextArea(String message) {
-        if (timeVisor.dateChanged()) dateLogged = false;
-        if (!dateLogged) {
-            textArea.appendText("Сегодня " + timeVisor.getCurrentDate() + "\n");
-            dateLogged = true;
-        }
-        textArea.appendText(timeVisor.getCurrentTime() + "\t" + message + "\n");
+        // после авторизации к любому сообщению (кроме их истории) добавить временную метку
+        // при получении истории дата уже записана (в последней строке)
+        if (authorized)
+            if (anyExceptHistory) {
+                if (TimeVisor.dateChanged()) dateLogged = false;
+                if (!dateLogged) {
+                    textArea.appendText("Сегодня " + TimeVisor.getCurrentDate() + "\n");
+                    dateLogged = true;
+                }
+            } else
+                dateLogged = true;
+        if (anyExceptHistory)
+            textArea.appendText((authorized ? TimeVisor.getCurrentTime() + "\t" : "") + message + "\n");
+        else
+            textArea.appendText(message + (authorized ? "" : "\n"));
+        anyExceptHistory = authorized;
     }
 
     @Override
@@ -125,7 +137,6 @@ public class Controller implements Initializable {
             });
             clientList.setContextMenu(new ContextMenu(menuItem));
         });
-        timeVisor = new TimeVisor();
         clientRunning = true;
         changeUserState(false);
     }
