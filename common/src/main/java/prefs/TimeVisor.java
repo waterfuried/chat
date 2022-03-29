@@ -5,7 +5,7 @@ import java.util.Calendar;
 import java.util.Date;
 
 public class TimeVisor {
-    public static int curDate;
+    private static int curDate;
 
     static  { changeDate(); }
 

@@ -2,7 +2,7 @@ package authService;
 
 import java.sql.*;
 
-public class AuthServiceDB extends AuthServiceCommon {
+public class AuthServiceDB implements AuthService {
     private static final String DB_CONTROL = "sqlite";
     private static final String DB_FILE = "chatty.db";
     private static final String DB_USERS_TABLE = "users";
@@ -22,7 +22,10 @@ public class AuthServiceDB extends AuthServiceCommon {
 
        для проверки же связи с БД, вместо ранее использовавшейся загрузки данных всех
        пользователей, можно/нужно проверить наличие в ней таблицы пользователей -
-       этот факт будет признаком успешности запуска сервиса работы с БД
+       этот факт будет признаком успешного запуска сервиса работы с БД
+
+       после исключения из сервиса дублирования данных в ОП
+       исключено и наследование от AuthServiceCommon
      */
     public AuthServiceDB() {
         try { connect(); }
@@ -39,10 +42,10 @@ public class AuthServiceDB extends AuthServiceCommon {
         try {
             st.close();
             connection.close();
-        } catch (SQLException ex) {
-            ex.printStackTrace();
-        }
+        } catch (SQLException ex) { ex.printStackTrace(); }
     }
+
+    private String adjustQuery(String query) { return String.format(query, DB_USERS_TABLE); }
 
     // проверка связи с БД - поиск таблицы пользователей
     private boolean testDB() {
@@ -64,22 +67,20 @@ public class AuthServiceDB extends AuthServiceCommon {
     // проверить наличие пользователя в таблице БД по логину и паролю
     @Override public String getNickname(String login, String password) {
         try (PreparedStatement ps = connection.prepareStatement(
-            "SELECT * FROM " + DB_USERS_TABLE + " WHERE login = ? AND pwd = ? LIMIT 1;")) {
+                adjustQuery("SELECT * FROM %s WHERE login = ? AND pwd = ? LIMIT 1;"))) {
             ps.setString(1, login);
             ps.setString(2, password);
             ResultSet rs = ps.executeQuery();
             if (rs.next())
                 return rs.getString("nickname");
-        } catch (SQLException ex) {
-            ex.printStackTrace();
-        }
+        } catch (SQLException ex) { ex.printStackTrace(); }
         return null;
     }
 
     // проверить наличие пользователя в таблице БД по никнейму
     @Override public boolean alreadyRegistered(String nickname) {
         try (PreparedStatement ps = connection.prepareStatement(
-                "SELECT nickname FROM " + DB_USERS_TABLE + " WHERE nickname = ? LIMIT 1;")) {
+                adjustQuery("SELECT nickname FROM %s WHERE nickname = ? LIMIT 1;"))) {
             ps.setString(1, nickname);
             return ps.executeQuery().next();
         } catch (SQLException ex) { ex.printStackTrace(); }
@@ -89,7 +90,7 @@ public class AuthServiceDB extends AuthServiceCommon {
     // изменить никнейм пользователя
     @Override public boolean updateData(String oldNick, String newNick) {
         try (PreparedStatement ps = connection.prepareStatement(
-                "UPDATE " + DB_USERS_TABLE + " SET nickname = ? WHERE nickname = ?;")) {
+                adjustQuery("UPDATE %s SET nickname = ? WHERE nickname = ?;"))) {
             ps.setString(1, newNick);
             ps.setString(2, oldNick);
             ps.executeUpdate();
@@ -104,15 +105,13 @@ public class AuthServiceDB extends AuthServiceCommon {
     @Override public boolean registerUser(String login, String password, String nickname) {
         if (getNickname(login, password) == null) {
             try (PreparedStatement ps = connection.prepareStatement(
-                    "INSERT INTO " + DB_USERS_TABLE + " (login, pwd, nickname) VALUES (?, ?, ?);")) {
+                    adjustQuery("INSERT INTO %s (login, pwd, nickname) VALUES (?, ?, ?);"))) {
                 ps.setString(1, login);
                 ps.setString(2, password);
                 ps.setString(3, nickname);
                 ps.executeUpdate();
                 return true;
-            } catch (SQLException ex) {
-                ex.printStackTrace();
-            }
+            } catch (SQLException ex) { ex.printStackTrace(); }
         }
         return false;
     }
