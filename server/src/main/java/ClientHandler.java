@@ -29,7 +29,9 @@ public class ClientHandler {
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
 
-            new Thread(() -> {
+            // выполнять обработку в пуле потоков, по возможности используя
+            // для новых ранее созданные структуры уже завершившихся
+            server.getThreadPool().execute(() -> {
                 try {
                     //цикл аутентификации
 
@@ -155,7 +157,7 @@ public class ClientHandler {
                     try { socket.close(); }
                     catch (IOException ex) { ex.printStackTrace(); }
                 }
-            }).start();
+            });
 
         } catch (IOException ex) { ex.printStackTrace(); }
     }

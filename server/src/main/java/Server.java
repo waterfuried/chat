@@ -7,14 +7,17 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Scanner;
+import java.util.concurrent.*;
 
 public class Server {
     private ServerSocket server;
     private Socket socket;
 
-    private final List<ClientHandler> clients;
+    private List<ClientHandler> clients;
     private AuthService authService;
+
+    private ExecutorService threadPool;
 
     public Server() {
         clients = new CopyOnWriteArrayList<>();
@@ -29,28 +32,63 @@ public class Server {
         try {
             server = new ServerSocket(Prefs.PORT);
             System.out.println("Запуск сервера произведен");
+            // как указано в документации, этот метод создаст пул потоков, в котором
+            // новые потоки будут создаваться только при необходимости - для выполнения
+            // задач преимущественно будут использоваться структуры для ранее созданных
+            // потоков, которые завершили свое выполнение;
+            // такой подход, безусловно, лучше чем ранее использовавшееся создание нового
+            // потока для каждого обработчика запросов клиента
+            threadPool = Executors.newCachedThreadPool();
 
-            while (true) {
-                socket = server.accept();
-                System.out.println("Соединение с новым клиентом установлено");
-                new ClientHandler(this, socket);
-            }
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        } finally {
-            try {
-                socket.close();
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
+            threadPool.submit(() -> {
+                try {
+                    while (server != null) {
+                        // если работа сервера завершится по команде выхода, серверный сокет
+                        // будет закрыт, и здесь - в процессе ожидания нового подключения -
+                        // произойдет исключение;
+                        // катастрофы в этом не вижу - просто не состоится новое подключение
+                        Socket curSocket = server.accept();
+                        if (server != null) {
+                            boolean newSocket = false;
+                            if (curSocket != null)
+                                newSocket = socket == null || curSocket != socket;
+                            if (newSocket) {
+                                socket = curSocket;
+                                System.out.println("Соединение с новым клиентом установлено");
+                                new ClientHandler(this, socket);
+                            }
+                        }
+                    }
+                } catch (Exception ex) { ex.printStackTrace(); }
+                finally {
+                    try { if (socket != null) socket.close(); }
+                    catch (Exception ex) { ex.printStackTrace(); }
+                }
+            });
+
+            System.out.println("команда для завершения работы - " + Prefs.getExitCommand());
+            Scanner sc = new Scanner(System.in);
+            boolean shutdown;
+            do {
+                shutdown = sc.nextLine().equalsIgnoreCase(Prefs.getExitCommand());
+            } while (!shutdown);
+        } catch (Exception ex) { ex.printStackTrace(); }
+        finally {
             try {
                 server.close();
                 authService.close();
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
+            } catch (IOException ex) { ex.printStackTrace(); }
+            for (ClientHandler c : clients) c.sendMsg(Prefs.getExitCommand());
+            clients = null;
+            threadPool.shutdown();
         }
     }
+
+    // "указатели" на сервисы
+    public ExecutorService getThreadPool() { return threadPool; } // пула потоков
+    public AuthService getAuthService() {
+        return authService;
+    } // авторизации
 
     // широковещательные сообщения записывать в журнал каждого пользователя
     public void sendBroadcastMsg(ClientHandler sender, String msg){
@@ -104,7 +142,7 @@ public class Server {
     }
 
     /*
-        попытаться изменить ник - как в БД (при наличии связи с ней), так и в списке пользователей
+        попытаться изменить ник - в БД (при наличии связи с ней) или в списке пользователей
         вернуть результат - удачно/нет
 
         если данные не были обновлены - например, ошибка записи в БД -
@@ -129,10 +167,6 @@ public class Server {
     public void unsubscribe(ClientHandler clientHandler){
         clients.remove(clientHandler);
         broadcastClientList();
-    }
-
-    public AuthService getAuthService() {
-        return authService;
     }
 
     public static void main(String[] args) { new Server(); }
