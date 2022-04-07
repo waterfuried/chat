@@ -24,6 +24,8 @@ public class Prefs {
 
     // имя папки с журналами пользователей
     public static final String historyFolder = "history";
+    // имя папки с журналами сервера
+    public static final String logFolder = "log";
 
     public static String getCommand(String cmdName, String ... args) {
         if (args == null || args.length == 0)

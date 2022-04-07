@@ -19,6 +19,7 @@ public class ClientHandler {
     private boolean dateLogged;
 
     private OutputStreamWriter logWriter;
+    private EventLogger logger;
 
     public String getLogin() { return login; }
     public String getNickname() { return nickname; }
@@ -28,6 +29,7 @@ public class ClientHandler {
         try {
             in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
+            logger = new EventLogger(ClientHandler.class.getName(), null);
 
             // выполнять обработку в пуле потоков, по возможности используя
             // для новых ранее созданные структуры уже завершившихся
@@ -48,7 +50,7 @@ public class ClientHandler {
 
                             // команда выхода
                             if (s.equals(Prefs.getExitCommand())) {
-                                sendMsg(Prefs.getExitCommand());
+                                sendMsg(Prefs.getExitCommand(), null);
                                 break;
                             }
 
@@ -56,25 +58,32 @@ public class ClientHandler {
                             if (s.startsWith(Prefs.getCommand(Prefs.COM_AUTHORIZE))) {
                                 String[] token = s.split(" ", 3);
                                 if (token.length == 3) {
+                                    String authTrial =
+                                            "\t\t\tЛогин: " + token[1] + "\n" +
+                                            "\t\t\tПароль: " + token[2];
                                     String newNick = server.getAuthService()
                                             .getNickname(login = token[1], token[2]);
                                     if (newNick != null) {
                                         if (server.isUserConnected(login)) {
-                                            sendMsg("Учетная запись уже используется пользователем " + newNick);
+                                            sendMsg("Учетная запись уже используется пользователем " + newNick,
+                                                    "Ошибка авторизации:\n" + authTrial);
                                         } else {
                                             socket.setSoTimeout(0);
-                                            sendMsg(Prefs.getCommand(Prefs.SRV_AUTH_OK, nickname = newNick));
+                                            sendMsg(Prefs.getCommand(Prefs.SRV_AUTH_OK, nickname = newNick),
+                                                    "Произведена авторизация в чате:\n" + authTrial);
                                             authenticated = true;
                                             logEvent("Выполнен вход в чат");
                                             // после авторизации клиента отправить ему его последнюю историю
                                             // и список активных пользователей
                                             server.subscribe(this);
-                                            sendMsg(readLastLines(100));
+                                            sendMsg(readLastLines(100),
+                                                    "Клиенту " + this.getLogin() +
+                                                            " отправлена его история сообщений");
                                             break;
                                         }
-                                    } else {
-                                        sendMsg("Логин / пароль не верны");
-                                    }
+                                    } else
+                                        sendMsg("Логин / пароль не верны",
+                                                "Отказ при авторизации:\n" + authTrial);
                                     if (!authenticated) sendAuthorizationWarning();
                                 }
                             }
@@ -84,14 +93,16 @@ public class ClientHandler {
                                 String[] token = str.split(" ");
                                 if (token.length == 4) {
                                     socket.setSoTimeout(0);
+                                    String regTrial =
+                                            "\t\t\tЛогин: " + token[1] + "\n" +
+                                            "\t\t\tНикнейм: " + token[3];
                                     if (server.getAuthService().registerUser(token[1], token[2], token[3])) {
-                                        logEvent(token[1],"Выполнена регистрация в чате:\n" +
-                                                "\t\t\tЛогин: " + token[1] + "\n" +
-                                                "\t\t\tПароль: " + token[2] + "\n" +
-                                                "\t\t\tНикнейм: " + token[3]);
-                                        sendMsg(Prefs.getCommand(Prefs.SRV_REG_ACCEPT));
+                                        regTrial = "Выполнена регистрация в чате:\n" + regTrial;
+                                        logEvent(token[1], regTrial + "\n\t\t\tПароль: " + token[2]);
+                                        sendMsg(Prefs.getCommand(Prefs.SRV_REG_ACCEPT), regTrial);
                                     } else
-                                        sendMsg(Prefs.getCommand(Prefs.SRV_REG_FAULT));
+                                        sendMsg(Prefs.getCommand(Prefs.SRV_REG_FAULT),
+                                                "Отказ при попытке регистрации:\n" + regTrial);
                                 }
                             }
                         }
@@ -107,7 +118,8 @@ public class ClientHandler {
                             switch (s[0].toLowerCase()) {
                                 // завершение работы пользователя
                                 case Prefs.COM_QUIT:
-                                    sendMsg(Prefs.getExitCommand());
+                                    sendMsg(Prefs.getExitCommand(),
+                                            "Клиент " + this.getLogin() + " вышел из чата ");
                                     break;
                                 // отправка личного сообщения
                                 case Prefs.COM_PRIVATE_MSG:
@@ -117,12 +129,18 @@ public class ClientHandler {
                                 // смена пользователем своего ника
                                 case Prefs.COM_CHANGE_NICK:
                                     if (s.length == 2 && !s[1].equals(this.getNickname())) {
+                                        String changeTrial =
+                                                "\t\t\tЛогин: " + this.getLogin() + "\n" +
+                                                "\t\t\tПрежний никнейм: " + this.getNickname() + "\n" +
+                                                "\t\t\tНовый никнейм: " + s[1];
                                         if (server.userRegistered(s[1]))
-                                            sendMsg("Пользователь с никнеймом " + s[1] + " уже зарегистрирован");
+                                            sendMsg("Пользователь с никнеймом " + s[1] + " уже зарегистрирован",
+                                                    "Отказ в смене никнейма:\n" + changeTrial);
                                         else {
                                             String oldNick = this.getNickname();
                                             if (server.userDataUpdated(oldNick, s[1])) {
-                                                sendMsg(Prefs.getCommand(Prefs.SRV_CHANGE_OK, s[1]));
+                                                sendMsg(Prefs.getCommand(Prefs.SRV_CHANGE_OK, s[1]),
+                                                        "Выполнена смена никнейма:\n" + changeTrial);
                                                 // широковещательные сообщения записываются и в журнал
                                                 server.sendBroadcastMsg(this, "это мой новый никнейм," +
                                                         " прежний - " + oldNick);
@@ -131,7 +149,8 @@ public class ClientHandler {
                                                 // отправить отсюда напрямую в клиентское окно, но поскольку
                                                 // в нем нужно еще изменить ник (в заголовке),
                                                 // решил сделать это через отклики сервера
-                                                sendMsg(Prefs.getCommand(Prefs.SRV_CHANGE_FAULT));
+                                                sendMsg(Prefs.getCommand(Prefs.SRV_CHANGE_FAULT),
+                                                        "Ошибка при смене никнейма:\n" + changeTrial);
                                         }
                                     }
                                     break;
@@ -146,35 +165,37 @@ public class ClientHandler {
                     // с отправкой команды выхода в методе connect контроллера цикл аутентификации
                     // прервется и произойдет переход далее - к циклу работы (который не начнется при
                     // отсутствии авторизации) и сокет будет закрыт перед завершением работы потока
-                    sendMsg(Prefs.getExitCommand());
+                    sendMsg(Prefs.getExitCommand(), "Клиент отключен по таймауту");
                     // в любом случае выполнится блок finally с закрытием сокета -
                     // потому здесь нет смысла сбрасывать таймер таймаута
-                } catch (IOException ex) { ex.printStackTrace();
+                } catch (IOException ex) { logger.logError(ex);
                 } finally {
                     logEvent("Произведен выход из чата");
                     server.unsubscribe(this);
-                    System.out.println("Соединение с клиентом завершено");
+                    logger.info("Соединение с клиентом " + this.getLogin() + " завершено");
                     try { socket.close(); }
-                    catch (IOException ex) { ex.printStackTrace(); }
+                    catch (IOException ex) { logger.logError(ex); }
                 }
             });
 
-        } catch (IOException ex) { ex.printStackTrace(); }
+        } catch (IOException ex) { logger.logError(ex); }
     }
 
     // отправка служебного сообщения (извещения) пользователю
-    public void sendMsg(String msg) {
+    public void sendMsg(String msg, String logMessage) {
         try {
             out.writeUTF(msg);
+            if (logMessage != null) logger.info(logMessage.length() == 0 ? msg : logMessage);
             if (msg.equals(Prefs.getExitCommand())) authenticated = false;
-        } catch (IOException ex) { ex.printStackTrace(); }
+        } catch (IOException ex) { logger.logError(ex); }
     }
+
     // при отправке текстовых сообщений сервер рассылает их нескольким адресатам:
     // - личные - отправителю и получателю,
     // - широковещательные - всем,
     // каждое полученное сообщение записывается в журнал
     public void sendLoggedMsg(String msg) {
-        sendMsg(msg);
+        sendMsg(msg, null);
         logEvent(msg);
     }
 
@@ -183,6 +204,11 @@ public class ClientHandler {
         return Prefs.historyFolder +
                File.separator +
                Prefs.historyFolder + "_" + (login == null ? getLogin() : login)+ ".txt";
+    }
+
+    void raiseAndLog(String errMessage) throws IOException {
+        logger.logError(errMessage);
+        throw new IOException(errMessage);
     }
 
     void logEvent(String login, String matter) {
@@ -195,9 +221,9 @@ public class ClientHandler {
                         if (file.isFile() || file.createNewFile())
                             logWriter = new OutputStreamWriter(new FileOutputStream(file,true), StandardCharsets.UTF_8);
                         else
-                            throw new IOException("Ошибка создания файла журнала");
+                            raiseAndLog("Ошибка создания файла журнала клиента " + this.getLogin());
                     } else
-                        throw new IOException("Невозможно создать папку с журналами");
+                        raiseAndLog("Невозможно создать папку с журналами клиента " + this.getLogin());
                 }
 
                 if (TimeVisor.dateChanged()) dateLogged = false;
@@ -207,7 +233,7 @@ public class ClientHandler {
                 }
                 logWriter.write(TimeVisor.getCurrentTime() + "\t" + matter + "\n");
                 logWriter.flush();
-            } catch (IOException ex) { ex.printStackTrace(); }
+            } catch (IOException ex) { logger.logError(ex); }
     }
 
     void logEvent(String matter) { logEvent(null, matter); }
@@ -226,7 +252,7 @@ public class ClientHandler {
                 sb.append(s).append("\n");
             return sb.toString();
         } catch (IOException ex) {
-            ex.printStackTrace();
+            logger.logError(ex);
             return null;
         }
     }
@@ -268,7 +294,7 @@ public class ClientHandler {
                 warnMsg.append(sc).append(" секунд")
                        .append(getAccusativeEnding(sc));
             }
-            sendMsg(warnMsg.toString());
+            sendMsg(warnMsg.toString(), null);
         }
     }
 }

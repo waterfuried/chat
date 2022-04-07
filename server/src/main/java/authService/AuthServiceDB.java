@@ -1,5 +1,6 @@
 package authService;
 
+import prefs.*;
 import java.sql.*;
 
 public class AuthServiceDB implements AuthService {
@@ -9,6 +10,8 @@ public class AuthServiceDB implements AuthService {
 
     private static Connection connection;
     private static Statement st;
+
+    private final EventLogger logger;
 
     /*
        когда используется БД, хранящая данные о пользователях, дублирование этой информации
@@ -28,8 +31,9 @@ public class AuthServiceDB implements AuthService {
        исключено и наследование от AuthServiceCommon
      */
     public AuthServiceDB() {
+        logger = new EventLogger(AuthServiceDB.class.getName(), null);
         try { connect(); }
-        catch (Exception ex) { ex.printStackTrace(); }
+        catch (Exception ex) { logger.logError(ex); }
     }
 
     private void connect() throws Exception {
@@ -42,7 +46,7 @@ public class AuthServiceDB implements AuthService {
         try {
             st.close();
             connection.close();
-        } catch (SQLException ex) { ex.printStackTrace(); }
+        } catch (SQLException ex) { logger.logError(ex); }
     }
 
     private String adjustQuery(String query) { return String.format(query, DB_USERS_TABLE); }
@@ -59,7 +63,7 @@ public class AuthServiceDB implements AuthService {
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='" + DB_USERS_TABLE + "';")) {
             return rs.next() && rs.getRow() > 0;*/
         } catch (SQLException ex) {
-            ex.printStackTrace();
+            logger.logError(ex);
             return false;
         }
     }
@@ -73,7 +77,7 @@ public class AuthServiceDB implements AuthService {
             ResultSet rs = ps.executeQuery();
             if (rs.next())
                 return rs.getString("nickname");
-        } catch (SQLException ex) { ex.printStackTrace(); }
+        } catch (SQLException ex) { logger.logError(ex); }
         return null;
     }
 
@@ -83,7 +87,7 @@ public class AuthServiceDB implements AuthService {
                 adjustQuery("SELECT nickname FROM %s WHERE nickname = ? LIMIT 1;"))) {
             ps.setString(1, nickname);
             return ps.executeQuery().next();
-        } catch (SQLException ex) { ex.printStackTrace(); }
+        } catch (SQLException ex) { logger.logError(ex); }
         return false;
     }
 
@@ -96,7 +100,7 @@ public class AuthServiceDB implements AuthService {
             ps.executeUpdate();
             return true;
         } catch (SQLException ex) {
-            ex.printStackTrace();
+            logger.logError(ex);
             return false;
         }
     }
@@ -111,7 +115,7 @@ public class AuthServiceDB implements AuthService {
                 ps.setString(3, nickname);
                 ps.executeUpdate();
                 return true;
-            } catch (SQLException ex) { ex.printStackTrace(); }
+            } catch (SQLException ex) { logger.logError(ex); }
         }
         return false;
     }
