@@ -77,9 +77,9 @@ public class Controller implements Initializable {
 
         if (!authorized) {
             nickname = "";
-        } else {
+            anyExceptHistory = false;
+        } else
             Platform.runLater(() -> textField.requestFocus());
-        }
 
         textArea.clear();
         setTitle(nickname);
