@@ -9,6 +9,7 @@ import java.net.Socket;
 import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.*;
+import java.util.logging.Handler;
 
 public class Server {
     private ServerSocket server;
@@ -20,6 +21,8 @@ public class Server {
     private ExecutorService threadPool;
 
     private final EventLogger logger;
+
+    CountDownLatch latch;
 
     public Server() {
         logger = new EventLogger(Server.class.getName(), null);
@@ -76,12 +79,23 @@ public class Server {
             } while (!shutdown);
         } catch (Exception ex) { logger.logError(ex); }
         finally {
+            // отправить сообщение (сигнал) о завершении работы потокам в пуле
+            // и дождаться завершения выполняемых в них задач
+            if (clients.size() > 0) {
+                latch = new CountDownLatch(clients.size());
+                for (ClientHandler c : clients) c.sendMsg(Prefs.getExitCommand(), null);
+                try { latch.await(); }
+                catch (InterruptedException ex) { logger.logError(ex); }
+            }
+
             try {
                 server.close();
                 authService.close();
             } catch (IOException ex) { logger.logError(ex); }
-
-            for (ClientHandler c : clients) c.sendMsg(Prefs.getExitCommand(), "Завершена работа сервера");
+            logger.info("Завершена работа сервера");
+            // для уверенности принудительно закрыть обработчики логирования -
+            // хотя, возможно, оно происходит автоматически при завершении работы
+            for (Handler h : logger.getHandlers()) h.close();
             clients = null;
             threadPool.shutdown();
         }

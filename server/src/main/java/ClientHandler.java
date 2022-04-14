@@ -7,6 +7,7 @@ import java.net.SocketTimeoutException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.logging.Handler;
 
 // обработчик запросов клиента
 public class ClientHandler {
@@ -175,6 +176,11 @@ public class ClientHandler {
                     logger.info("Соединение с клиентом " + this.getLogin() + " завершено");
                     try { socket.close(); }
                     catch (IOException ex) { logger.logError(ex); }
+                    // возможно, закрытие обработчиков логирования происходит автоматически при завершении
+                    // потока (или выполняемой в нем задачи - в пуле потоки используются повторно),
+                    // но для уверенности стоит их закрыть принудительно
+                    for (Handler h : logger.getHandlers()) h.close();
+                    server.latch.countDown();
                 }
             });
 
