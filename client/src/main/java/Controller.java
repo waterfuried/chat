@@ -106,6 +106,9 @@ public class Controller implements Initializable {
             textArea.appendText((authorized ? TimeVisor.getCurrentTime() + "\t" : "") + message + "\n");
         else
             textArea.appendText(message + (authorized ? "" : "\n"));
+        // изменяет текущую позицию без перерисовки,
+        // искусственное добавление и удаление новой строки не имеет визуального эффекта
+        // textArea.end();
         anyExceptHistory = authorized;
     }
 
@@ -143,7 +146,7 @@ public class Controller implements Initializable {
 
     private void setTitle(String nickname) {
         Platform.runLater(() -> {
-            String title = "Chatty";
+            String title = Prefs.TITLE;
             if (nickname != null && nickname.length() > 0)
                 title += " [ " + nickname + " ]";
             stage.setTitle(title);
@@ -291,7 +294,7 @@ public class Controller implements Initializable {
 
             regStage = new Stage();
 
-            regStage.setTitle("Chatty registration");
+            regStage.setTitle(Prefs.TITLE + " registration");
             regStage.setScene(new Scene(root));
 
             regController = fxmlLoader.getController();

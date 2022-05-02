@@ -4,6 +4,8 @@ public class Prefs {
     public static final int PORT = 8189; // порт подключения
     public static final int TIMEOUT = 120; // время на прохождение авторизации, секунды
 
+    // название проекта
+    public static final String TITLE = "Chatty";
     // признак команды
     public static final String COM_ID = "/";
 

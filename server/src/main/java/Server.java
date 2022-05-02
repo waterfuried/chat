@@ -9,7 +9,6 @@ import java.net.Socket;
 import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.*;
-import java.util.logging.Handler;
 
 public class Server {
     private ServerSocket server;
@@ -24,11 +23,11 @@ public class Server {
 
     CountDownLatch latch;
 
-    public Server() {
+    public Server(String DBService) {
         logger = new EventLogger(Server.class.getName(), null);
         clients = new CopyOnWriteArrayList<>();
         // если нет подключения к БД, запустить простой сервис авторизации
-        authService = new AuthServiceDB();
+        authService = new AuthServiceDB(DBService);
         if (!authService.isServiceActive()) {
             authService.close();
             authService = new AuthServiceSimple();
@@ -93,9 +92,7 @@ public class Server {
                 authService.close();
             } catch (IOException ex) { logger.logError(ex); }
             logger.info("Завершена работа сервера");
-            // для уверенности принудительно закрыть обработчики логирования -
-            // хотя, возможно, оно происходит автоматически при завершении работы
-            for (Handler h : logger.getHandlers()) h.close();
+            logger.closeHandlers();
             clients = null;
             threadPool.shutdown();
         }
@@ -184,5 +181,5 @@ public class Server {
         broadcastClientList();
     }
 
-    public static void main(String[] args) { new Server(); }
+    public static void main(String[] args) { new Server(args.length > 0 ? args[0] : null); }
 }

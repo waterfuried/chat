@@ -37,4 +37,9 @@ public class EventLogger extends Logger {
 
     public void logError(Exception ex) { log(Level.SEVERE, ex.getMessage()); }
     public void logError(String errorMessage) { log(Level.SEVERE, errorMessage); }
+
+    // возможно, этот метод лишний - если закрытие обработчиков логирования
+    // происходит автоматически при завершении работы, но поскольку уверенности
+    // в этом нет, в создающих обработчики классах его стоит вызывать принудительно
+    public void closeHandlers() { for (Handler h : getHandlers()) h.close(); }
 }
