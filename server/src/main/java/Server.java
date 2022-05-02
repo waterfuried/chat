@@ -19,11 +19,15 @@ public class Server {
 
     private ExecutorService threadPool;
 
-    public Server() {
-        clients = new CopyOnWriteArrayList<>();
+    private final EventLogger logger;
 
+    CountDownLatch latch;
+
+    public Server(String DBService) {
+        logger = new EventLogger(Server.class.getName(), null);
+        clients = new CopyOnWriteArrayList<>();
         // если нет подключения к БД, запустить простой сервис авторизации
-        authService = new AuthServiceDB();
+        authService = new AuthServiceDB(DBService);
         if (!authService.isServiceActive()) {
             authService.close();
             authService = new AuthServiceSimple();
@@ -31,7 +35,7 @@ public class Server {
 
         try {
             server = new ServerSocket(Prefs.PORT);
-            System.out.println("Запуск сервера произведен");
+            logger.info("Запуск сервера произведен");
             // как указано в документации, этот метод создаст пул потоков, в котором
             // новые потоки будут создаваться только при необходимости - для выполнения
             // задач преимущественно будут использоваться структуры для ранее созданных
@@ -54,31 +58,41 @@ public class Server {
                                 newSocket = socket == null || curSocket != socket;
                             if (newSocket) {
                                 socket = curSocket;
-                                System.out.println("Соединение с новым клиентом установлено");
+                                logger.info("Соединение с новым клиентом установлено");
                                 new ClientHandler(this, socket);
                             }
                         }
                     }
-                } catch (Exception ex) { ex.printStackTrace(); }
+                } catch (Exception ex) { logger.logError(ex); }
                 finally {
                     try { if (socket != null) socket.close(); }
-                    catch (Exception ex) { ex.printStackTrace(); }
+                    catch (Exception ex) { logger.logError(ex); }
                 }
             });
 
-            System.out.println("команда для завершения работы - " + Prefs.getExitCommand());
+            logger.info("Команда для завершения работы - " + Prefs.getExitCommand());
             Scanner sc = new Scanner(System.in);
             boolean shutdown;
             do {
                 shutdown = sc.nextLine().equalsIgnoreCase(Prefs.getExitCommand());
             } while (!shutdown);
-        } catch (Exception ex) { ex.printStackTrace(); }
+        } catch (Exception ex) { logger.logError(ex); }
         finally {
+            // отправить сообщение (сигнал) о завершении работы потокам в пуле
+            // и дождаться завершения выполняемых в них задач
+            if (clients.size() > 0) {
+                latch = new CountDownLatch(clients.size());
+                for (ClientHandler c : clients) c.sendMsg(Prefs.getExitCommand(), null);
+                try { latch.await(); }
+                catch (InterruptedException ex) { logger.logError(ex); }
+            }
+
             try {
                 server.close();
                 authService.close();
-            } catch (IOException ex) { ex.printStackTrace(); }
-            for (ClientHandler c : clients) c.sendMsg(Prefs.getExitCommand());
+            } catch (IOException ex) { logger.logError(ex); }
+            logger.info("Завершена работа сервера");
+            logger.closeHandlers();
             clients = null;
             threadPool.shutdown();
         }
@@ -86,46 +100,44 @@ public class Server {
 
     // "указатели" на сервисы
     public ExecutorService getThreadPool() { return threadPool; } // пула потоков
-    public AuthService getAuthService() {
-        return authService;
-    } // авторизации
+    public AuthService getAuthService() { return authService; } // авторизации
 
     // широковещательные сообщения записывать в журнал каждого пользователя
-    public void sendBroadcastMsg(ClientHandler sender, String msg){
-        for (ClientHandler c : clients)
-            c.sendLoggedMsg(String.format("[ %s ]: %s", sender.getNickname(), msg));
+    public void sendBroadcastMsg(ClientHandler sender, String message) {
+        String msg = String.format("[ %s ]: %s", sender.getNickname(), message);
+        for (ClientHandler c : clients) c.sendLoggedMsg(msg);
+        logger.info(msg);
     }
 
     // поскольку личные сообщения дооформляются ("для"/"от") здесь,
     // получают их (с разным дооформлением) как отправитель, так и получатель,
     // возвращать дооформенные в виде строк, чтобы записать в журнал отправителя
-    public String sendPrivateMsg(ClientHandler sender, String receiver, String msg) {
-        String message = "[ личное сообщение %s %s ]: %s";
+    public String sendPrivateMsg(ClientHandler sender, String receiver, String message) {
+        String msgPattern = "[ личное сообщение %s %s ]: %s";
         for (ClientHandler c : clients) {
             if (c.getNickname().equals(receiver)) {
                 // отправка получателю
-                c.sendLoggedMsg(String.format(message, "от", sender.getNickname(), msg));
+                c.sendLoggedMsg(String.format(msgPattern, "от", sender.getNickname(), message));
                 // отправка отправителю
                 if (!receiver.equals(sender.getNickname())) {
-                    sender.sendMsg(message = String.format(message, "для", receiver, msg));
-                    return message;
+                    String res = String.format(msgPattern, "для", receiver, message);
+                    sender.sendMsg(res, String.format("[ личное сообщение для %s от %s ]: %s",
+                                    receiver, sender.getNickname(), message));
+                    return res;
                 }
                 return "";
             }
         }
-        sender.sendMsg("Пользователя с ником \"" + receiver + "\" нет в чате");
+        sender.sendMsg("Пользователя с ником \"" + receiver + "\" нет в чате",
+                "Клиент " + sender.getLogin() +
+                        " отправил личное сообщение не существующему адресату - " + receiver);
         return "";
     }
 
     public void broadcastClientList() {
         StringBuilder sb = new StringBuilder(Prefs.getCommand(Prefs.COM_CLIENT_LIST));
-
-        for (ClientHandler c : clients) {
-            sb.append(" ").append(c.getNickname());
-        }
-        for (ClientHandler c : clients) {
-            c.sendMsg(sb.toString());
-        }
+        for (ClientHandler c : clients) sb.append(" ").append(c.getNickname());
+        for (ClientHandler c : clients) c.sendMsg(sb.toString(), null);
     }
 
     // проверить осуществление авторизиации пользователем с определенным логином
@@ -169,5 +181,5 @@ public class Server {
         broadcastClientList();
     }
 
-    public static void main(String[] args) { new Server(); }
+    public static void main(String[] args) { new Server(args.length > 0 ? args[0] : null); }
 }

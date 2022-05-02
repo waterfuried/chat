@@ -4,6 +4,8 @@ public class Prefs {
     public static final int PORT = 8189; // порт подключения
     public static final int TIMEOUT = 120; // время на прохождение авторизации, секунды
 
+    // название проекта
+    public static final String TITLE = "Chatty";
     // признак команды
     public static final String COM_ID = "/";
 
@@ -24,6 +26,8 @@ public class Prefs {
 
     // имя папки с журналами пользователей
     public static final String historyFolder = "history";
+    // имя папки с журналами сервера
+    public static final String logFolder = "log";
 
     public static String getCommand(String cmdName, String ... args) {
         if (args == null || args.length == 0)
