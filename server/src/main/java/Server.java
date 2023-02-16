@@ -1,19 +1,31 @@
 import prefs.*;
-import authService.*;
+import static prefs.Prefs.*;
+
+import observation.Observer;
+import observation.Observable;
+import authentification.*;
+import authentification.mapping.*;
+import authentification.service.*;
 
 import java.io.IOException;
 
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.*;
 
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 import java.util.concurrent.*;
 
-public class Server {
+/*
+    класс реализует поведенческий шаблон проектирования "Наблюдатель" -
+    обновление списка пользователей, которое происходит
+        - при входе/выходе нового пользователя в/из чата
+        - смене каким-либо пользователем своего ника
+ */
+public class Server implements Observable {
     private ServerSocket server;
     private Socket socket;
 
+    //поскольку класс обработчика клиента тоже реализует шаблон "Наблюдатель",
+    //к списку обработчмков можно обращаться как к списку ссылок на соответствующий интерфейс
     private List<ClientHandler> clients;
     private AuthService authService;
 
@@ -23,19 +35,22 @@ public class Server {
 
     CountDownLatch latch;
 
+    private IdentityMap identityMap; // шаблон "Коллекция объектов" используется для их кэширования
+
     public Server(String DBService) {
         logger = new EventLogger(Server.class.getName(), null);
         clients = new CopyOnWriteArrayList<>();
         // если нет подключения к БД, запустить простой сервис авторизации
-        authService = new AuthServiceDB(DBService);
+        authService = new DB(DBService);
         if (!authService.isServiceActive()) {
             authService.close();
-            authService = new AuthServiceSimple();
-        }
+            authService = new Simple();
+        } else
+            identityMap = new IdentityMap(/*(DB)authService*/);
 
         try {
             server = new ServerSocket(Prefs.PORT);
-            logger.info("Запуск сервера произведен");
+            logger.info(MSG_SERVER_STARTED);
             // как указано в документации, этот метод создаст пул потоков, в котором
             // новые потоки будут создаваться только при необходимости - для выполнения
             // задач преимущественно будут использоваться структуры для ранее созданных
@@ -58,7 +73,7 @@ public class Server {
                                 newSocket = socket == null || curSocket != socket;
                             if (newSocket) {
                                 socket = curSocket;
-                                logger.info("Соединение с новым клиентом установлено");
+                                logger.info(MSG_CLIENT_CONNECTED);
                                 new ClientHandler(this, socket);
                             }
                         }
@@ -70,7 +85,7 @@ public class Server {
                 }
             });
 
-            logger.info("Команда для завершения работы - " + Prefs.getExitCommand());
+            logger.info(MSG_SERVER_SHUTDOWN_CMD);
             Scanner sc = new Scanner(System.in);
             boolean shutdown;
             do {
@@ -82,7 +97,7 @@ public class Server {
             // и дождаться завершения выполняемых в них задач
             if (clients.size() > 0) {
                 latch = new CountDownLatch(clients.size());
-                for (ClientHandler c : clients) c.sendMsg(Prefs.getExitCommand(), null);
+                for (Observer c : clients) c.update(Prefs.getExitCommand());
                 try { latch.await(); }
                 catch (InterruptedException ex) { logger.logError(ex); }
             }
@@ -91,7 +106,7 @@ public class Server {
                 server.close();
                 authService.close();
             } catch (IOException ex) { logger.logError(ex); }
-            logger.info("Завершена работа сервера");
+            logger.info(MSG_SERVER_SHUTDOWN);
             logger.closeHandlers();
             clients = null;
             threadPool.shutdown();
@@ -113,7 +128,7 @@ public class Server {
     // получают их (с разным дооформлением) как отправитель, так и получатель,
     // возвращать дооформенные в виде строк, чтобы записать в журнал отправителя
     public String sendPrivateMsg(ClientHandler sender, String receiver, String message) {
-        String msgPattern = "[ личное сообщение %s %s ]: %s";
+        String msgPattern = MESSAGE_HEADER_PATTERN;
         for (ClientHandler c : clients) {
             if (c.getNickname().equals(receiver)) {
                 // отправка получателю
@@ -121,23 +136,23 @@ public class Server {
                 // отправка отправителю
                 if (!receiver.equals(sender.getNickname())) {
                     String res = String.format(msgPattern, "для", receiver, message);
-                    sender.sendMsg(res, String.format("[ личное сообщение для %s от %s ]: %s",
-                                    receiver, sender.getNickname(), message));
+                    sender.sendMsg(res, String.format(MESSAGE_HEADER_PATTERN,
+                                    "для "+receiver, "от "+sender.getNickname(), message));
                     return res;
                 }
                 return "";
             }
         }
-        sender.sendMsg("Пользователя с ником \"" + receiver + "\" нет в чате",
-                "Клиент " + sender.getLogin() +
-                        " отправил личное сообщение не существующему адресату - " + receiver);
+        sender.sendMsg(
+                String.format(WRONG_RECIPIENT, receiver),
+                String.format(WRONG_RECIPIENT_LOGGED, sender.getLogin(), receiver));
         return "";
     }
 
-    public void broadcastClientList() {
+    @Override public void notifyObservers() {
         StringBuilder sb = new StringBuilder(Prefs.getCommand(Prefs.COM_CLIENT_LIST));
         for (ClientHandler c : clients) sb.append(" ").append(c.getNickname());
-        for (ClientHandler c : clients) c.sendMsg(sb.toString(), null);
+        for (Observer c : clients) c.update(sb.toString());
     }
 
     // проверить осуществление авторизиации пользователем с определенным логином
@@ -149,7 +164,9 @@ public class Server {
     }
 
     // проверить наличие регистрации пользователя с определенным ником
-    public boolean userRegistered(String nickname){
+    public boolean userRegistered(String nickname) {
+        UserData data = getIdentityMap().getByNickname(nickname);
+        if (data == null) return false;
         return authService.alreadyRegistered(nickname);
     }
 
@@ -165,21 +182,23 @@ public class Server {
         if (authService.updateData(oldNick, newNick)) {
             for (ClientHandler c : clients)
                 if (c.getNickname().equals(oldNick)) c.setNickname(newNick);
-            broadcastClientList();
+            notifyObservers();
             return true;
         } else
             return false;
     }
 
-    public void subscribe(ClientHandler clientHandler){
-        clients.add(clientHandler);
-        broadcastClientList();
+    @Override public void subscribe(Observer clientHandler) {
+        clients.add((ClientHandler)clientHandler);
+        notifyObservers();
     }
 
-    public void unsubscribe(ClientHandler clientHandler){
-        clients.remove(clientHandler);
-        broadcastClientList();
+    @Override public void unsubscribe(Observer clientHandler) {
+        clients.remove((ClientHandler)clientHandler);
+        notifyObservers();
     }
+
+    public IdentityMap getIdentityMap() { return identityMap; }
 
     public static void main(String[] args) { new Server(args.length > 0 ? args[0] : null); }
 }

@@ -328,9 +328,7 @@ public class Controller implements Initializable {
         }
     }
 
-    private boolean registering() {
-        return regStage != null && regController.isRegistering();
-    }
+    private boolean registering() { return regStage != null && regController.isRegistering(); }
 
     // клавиши курсор вверх/вниз: показать последнюю команду/сообщение в поле ввода текста
     @FXML public void TFkeyReleased(KeyEvent ev) {

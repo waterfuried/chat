@@ -1,17 +1,27 @@
-package authService;
+package authentification.service;
 
 import prefs.*;
-import java.sql.*;
-import java.util.ArrayList;
-import java.util.Arrays;
+import authentification.*;
+import authentification.mapping.*;
 
-public class AuthServiceDB implements AuthService {
+import java.sql.*;
+import java.util.*;
+
+public class DB implements AuthService, Mappable<UserData> {
     public static final String JDBC = "jdbc";
     private static final String[] DB_CONTROL_NAME = { "sqlite", "mysql" };
     private static final String[] DB_CONTROL_PKG = { "org", "com" };
     private static final String[] DB_CONTROL_DRV = { JDBC.toUpperCase(), "cj." + JDBC + ".Driver" };
     private static final String[] DB_CONTROL_EXT = { "db", "idb" };
     private static final String DB_USERS_TABLE = "users";
+
+    public static final String SQL_FIND_BY_ID = "select * from %s where id = ? Limit 1;";
+    public static final String SQL_FIND_BY_LOGIN = "select * from %s where login = ? and pwd = ? Limit 1;";
+    public static final String SQL_FIND_BY_NICK = "select * from %s where nickname = ? Limit 1;";
+    public static final String SQL_INSERT = "INSERT INTO %s (login, pwd, nickname) VALUES (?, ?, ?);";
+    public static final String SQL_UPDATE = "UPDATE %s SET nickname = ? WHERE nickname = ?;";
+    public static final String SQL_DELETE_BY_ID = "delete from %s where id = ?;";
+    public static final String SQL_DELETE_BY_LOGIN = "delete from %s where login = ? and pwd = ?;";
 
     private static Connection connection;
     private static Statement st;
@@ -36,8 +46,8 @@ public class AuthServiceDB implements AuthService {
        после исключения из сервиса дублирования данных в ОП
        исключено и наследование от AuthServiceCommon
      */
-       public AuthServiceDB(String serviceName) {
-        logger = new EventLogger(AuthServiceDB.class.getName(), null);
+    public DB(String serviceName) {
+        logger = new EventLogger(DB.class.getName(), null);
         DBService = serviceName == null
                 ? 0
                 : new ArrayList<>(Arrays.asList(DB_CONTROL_NAME)).indexOf(serviceName.toLowerCase());
@@ -94,21 +104,22 @@ public class AuthServiceDB implements AuthService {
 
     // проверить наличие пользователя в таблице БД по логину и паролю
     @Override public String getNickname(String login, String password) {
-        try (PreparedStatement ps = connection.prepareStatement(
-                adjustQuery("SELECT * FROM %s WHERE login = ? AND pwd = ? LIMIT 1;"))) {
+        try (PreparedStatement ps = connection.prepareStatement(adjustQuery(SQL_FIND_BY_LOGIN))) {
             ps.setString(1, login);
             ps.setString(2, password);
             ResultSet rs = ps.executeQuery();
             if (rs.next())
-                return rs.getString("nickname");
+                return rs.getString(4);
         } catch (SQLException ex) { logger.logError(ex); }
         return null;
     }
 
     // проверить наличие пользователя в таблице БД по никнейму
+    // вообще говоря, нет ничего противоестественного в том,
+    // что разные пользователи могут выбирать одинаковые никнеймы,
+    // но пусть это все же будет ограничением
     @Override public boolean alreadyRegistered(String nickname) {
-        try (PreparedStatement ps = connection.prepareStatement(
-                adjustQuery("SELECT nickname FROM %s WHERE nickname = ? LIMIT 1;"))) {
+        try (PreparedStatement ps = connection.prepareStatement(adjustQuery(SQL_FIND_BY_NICK))) {
             ps.setString(1, nickname);
             return ps.executeQuery().next();
         } catch (SQLException ex) { logger.logError(ex); }
@@ -117,8 +128,7 @@ public class AuthServiceDB implements AuthService {
 
     // изменить никнейм пользователя
     @Override public boolean updateData(String oldNick, String newNick) {
-        try (PreparedStatement ps = connection.prepareStatement(
-                adjustQuery("UPDATE %s SET nickname = ? WHERE nickname = ?;"))) {
+        try (PreparedStatement ps = connection.prepareStatement(adjustQuery(SQL_UPDATE))) {
             ps.setString(1, newNick);
             ps.setString(2, oldNick);
             ps.executeUpdate();
@@ -130,19 +140,109 @@ public class AuthServiceDB implements AuthService {
     }
 
     //добавить нового зарегистрированного пользователя
-    @Override public boolean registerUser(String login, String password, String nickname) {
+    @Override public int registerUser(String login, String password, String nickname) {
         if (getNickname(login, password) == null) {
-            try (PreparedStatement ps = connection.prepareStatement(
-                    adjustQuery("INSERT INTO %s (login, pwd, nickname) VALUES (?, ?, ?);"))) {
+            try (PreparedStatement ps = connection.prepareStatement(adjustQuery(SQL_INSERT))) {
                 ps.setString(1, login);
                 ps.setString(2, password);
                 ps.setString(3, nickname);
-                ps.executeUpdate();
-                return true;
+                // DML-команды возвращают только число измененных строк в таблице, но не сами данные
+                if (ps.executeUpdate() > 0)
+                    return getUserId(login, password);
             } catch (SQLException ex) { logger.logError(ex); }
         }
-        return false;
+        return 0;
     }
 
     @Override public boolean isServiceActive() { return testDB(); }
+
+    // получить id пользователя в таблице БД по логину и паролю
+    private int getUserId(String login, String password) {
+        try (PreparedStatement ps = connection.prepareStatement(adjustQuery(SQL_FIND_BY_LOGIN))) {
+            ps.setString(1, login);
+            ps.setString(2, password);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next())
+                return rs.getInt(1);
+        } catch (SQLException ex) { logger.logError(ex); }
+        return 0;
+    }
+
+    /**
+        методы реализуют шаблон Преобразователь данных (Data Mapper),
+        позволяющий обмениваться данными с БД
+    **/
+    @Override public void insert(UserData data) {
+        registerUser(data.getLogin(), data.getPassword(), data.getNickname());
+    }
+
+    @Override public UserData find(Integer id) {
+        try (PreparedStatement ps = connection.prepareStatement(adjustQuery(SQL_FIND_BY_ID))) {
+            ps.setInt(1, id);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                UserData data = new UserData(
+                        rs.getString(2),
+                        rs.getString(3),
+                        rs.getString(4));
+                data.setId(rs.getInt(1));
+                return data;
+            }
+        } catch (SQLException ex) { logger.logError(ex); }
+        return null;
+    }
+
+    @Override public UserData find(UserData data) {
+        int type = 0;
+        if (data.getLogin() != null && data.getLogin().length() > 0) {
+            if (data.getPassword() != null && data.getPassword().length() > 0) type = 1;
+        } else
+        if (data.getNickname() != null && data.getNickname().length() > 0) type = 2;
+        UserData userData;
+        switch (type) {
+            case 1:
+                userData = new UserData(
+                        data.getLogin(),
+                        data.getPassword(),
+                        getNickname(data.getLogin(), data.getPassword()));
+                userData.setId(data.getId());
+                return userData;
+            case 2:
+                try (PreparedStatement ps = connection.prepareStatement(adjustQuery(SQL_FIND_BY_NICK))) {
+                    ps.setString(1, data.getNickname());
+                    ResultSet rs = ps.executeQuery();
+                    if (rs.next()) {
+                        userData = new UserData(
+                                rs.getString(2),
+                                rs.getString(3),
+                                data.getNickname());
+                        userData.setId(rs.getInt(1));
+                        return userData;
+                    }
+                } catch (SQLException ex) { logger.logError(ex); }
+        }
+        return null;
+    }
+
+    // обновление данных пользователя предполагает только изменение его имени (никнейма)
+    @Override public void update(UserData data) {
+        UserData userData = find(data);
+        if (userData != null && !userData.getNickname().equals(data.getNickname()))
+            updateData(userData.getNickname(), data.getNickname());
+    }
+
+    @Override public void delete(UserData data) {
+        try (PreparedStatement ps = connection.prepareStatement(adjustQuery(SQL_DELETE_BY_LOGIN))) {
+            ps.setString(1, data.getLogin());
+            ps.setString(2, data.getPassword());
+            ps.executeUpdate();
+        } catch (SQLException ex) { logger.logError(ex); }
+    }
+
+    @Override public void delete(Integer id) {
+        try (PreparedStatement ps = connection.prepareStatement(adjustQuery(SQL_DELETE_BY_ID))) {
+            ps.setInt(1, id);
+            ps.executeUpdate();
+        } catch (SQLException ex) { logger.logError(ex); }
+    }
 }

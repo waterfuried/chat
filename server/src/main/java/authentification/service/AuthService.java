@@ -1,4 +1,4 @@
-package authService;
+package authentification.service;
 
 public interface AuthService {
     /**
@@ -9,9 +9,10 @@ public interface AuthService {
 
     /**
      * выполнить регистрацию учетной записи
-     * @return true при успешной регистрации, false - в противном случае (если логин/никнейм заняты)
+     * @return идентификатор учетной записи при успешной ее регистрации,
+     * <br>0 - в противном случае (если логин уже занят)
      **/
-    boolean registerUser(String login, String password, String nickname);
+    int registerUser(String login, String password, String nickname);
 
     /**
      * проверить запуск сервиса
