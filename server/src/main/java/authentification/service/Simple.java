@@ -1,9 +1,11 @@
-package authService;
+package authentification.service;
+
+import authentification.*;
 
 import java.util.*;
 
-public class AuthServiceSimple extends AuthServiceCommon {
-    public AuthServiceSimple() {
+public class Simple extends Common {
+    public Simple() {
         List<UserData> users = new ArrayList<>();
         users.add(new UserData("qwe", "qwe", "qwe"));
         users.add(new UserData("asd", "asd", "asd"));

@@ -38,14 +38,13 @@ public class RegController implements Initializable {
     @Override
     public void initialize (URL location, ResourceBundle resources) {
         Platform.runLater(() -> {
-            setRegistering(true);
             Stage stage = (Stage) loginField.getScene().getWindow();
             stage.setOnShown(event -> {
-                setRegistering(true);
+                registering = true;
                 loginField.requestFocus();
             });
             stage.setOnCloseRequest(event -> {
-                setRegistering(false);
+                registering = false;
                 textArea.clear();
                 loginField.clear();
                 passwordField.clear();
@@ -78,13 +77,7 @@ public class RegController implements Initializable {
         });
     }
 
-    private void setRegistering (boolean registering) {
-        this.registering = registering;
-    }
-
-    public boolean isRegistering() {
-        return registering;
-    }
+    public boolean isRegistering() { return registering; }
 
     public void showResult (String command) {
         if (command.equals(Prefs.getCommand(Prefs.SRV_REG_ACCEPT)))

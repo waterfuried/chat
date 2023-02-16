@@ -1,11 +1,13 @@
-package authService;
+package authentification.service;
+
+import authentification.*;
 
 import java.util.*;
 
-public class AuthServiceCommon implements AuthService {
+public class Common implements AuthService {
     private List<UserData> users;
 
-    public AuthServiceCommon() { this.users = new ArrayList<>(); }
+    public Common() { this.users = new ArrayList<>(); }
 
     @Override
     public String getNickname(String login, String password) {
@@ -18,13 +20,14 @@ public class AuthServiceCommon implements AuthService {
 
     @Override
     // сохранение данных нового пользователя в оперативной памяти
-    public boolean registerUser(String login, String password, String nickname) {
+    public int registerUser(String login, String password, String nickname) {
         for (UserData u : users)
             if (u.getLogin().equals(login) || u.getNickname().equals(nickname))
-                return false;
+                return 0;
 
+        // по описанию, добавление происходит в конец списка, то есть пустот в нем нет
         users.add(new UserData(login, password, nickname));
-        return true;
+        return users.size();
     }
 
     @Override public boolean isServiceActive() { return users.size() > 0; }
